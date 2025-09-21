@@ -20,9 +20,9 @@ from sklearn.feature_selection import VarianceThreshold
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.utils import class_weight
-from sklearn.svm import SVR  # 导入SVR类
+from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
-from sklearn.model_selection import learning_curve  # 导入learning_curve函数
+from sklearn.model_selection import learning_curve  
 from sklearn.decomposition import PCA
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import preprocessing
@@ -64,7 +64,7 @@ print(all_features.iloc[0:4,[0,1,2,-2,-1]])
     1        0  
     2        0  
     3        0  
-    
+
 
 
 ```python
@@ -80,7 +80,7 @@ print(numeric_features)
            'fr_tetrazole', 'fr_thiazole', 'fr_thiocyan', 'fr_thiophene',
            'fr_unbrch_alkane', 'fr_urea'],
           dtype='object', length=208)
-    
+
 
 
 ```python
@@ -103,14 +103,14 @@ print(data_labels)
             1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
             1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
             1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.])
-    
+
 
 
 ```python
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.feature_selection import RFE
-model = RandomForestRegressor(n_estimators=100)   # 替换为你想要的模型
-rfe = RFE(model, n_features_to_select=60)  # 调整要选择的特征数量
+model = RandomForestRegressor(n_estimators=100)   
+rfe = RFE(model, n_features_to_select=60)  
 X_rfe = rfe.fit_transform(data_features,data_labels)
 ```
 
@@ -122,6 +122,7 @@ selected_features_index = rfe.support_
 
 ```python
 X_selected=data_features[:,selected_features_index]
+selected_feature_names = all_features.columns[selected_features_index]
 ```
 
 
@@ -144,13 +145,11 @@ print(X_test.shape)
 
     (162, 60)
     (54, 60)
-    
+
 
 
 ```python
-# 将n_jobs设置为-1，以便使用CPU资源
 
-# 定义要调优的超参数范围
 param_dist_rf = {
     'n_estimators': [50,100,125],
     'max_features': [0.25, 0.5, 0.75],
@@ -170,11 +169,11 @@ param_dist_ann = {
 
 # 创建模型对象
 rf_model = RandomForestClassifier()
-svm_model = SVC(probability=True)
+svm_model = SVC(kernel='linear',probability=True)
 ann_model = MLPClassifier()
 
 # 创建随机搜索对象并进行调参
-grid_search_rf= RandomizedSearchCV(rf_model, param_dist_rf, cv=5, n_iter=27,random_state=42)   #n_iter参数是指在随机搜索过程中要尝试的参数组合数量。随机搜索是一种通过从参数空间中随机选择参数组合来进行模型调参的方法。
+grid_search_rf= RandomizedSearchCV(rf_model, param_dist_rf, cv=5, n_iter=27,random_state=42)   
 grid_search_svm = RandomizedSearchCV(svm_model, param_dist_svm, cv=5, n_iter=16,random_state=42)
 grid_search_ann  = RandomizedSearchCV(ann_model, param_dist_ann, cv=5, n_iter=36,random_state=42)
 
@@ -193,8 +192,120 @@ print("ANN最佳超参数组合：", grid_search_ann.best_params_)
     Random Forest最佳超参数组合： {'n_estimators': 100, 'max_features': 0.75, 'max_depth': 10}
     SVM最佳超参数组合： {'gamma': 0.015, 'C': 2.0}
     ANN最佳超参数组合： {'max_iter': 1500, 'hidden_layer_sizes': (75,), 'alpha': 0.02}
-    
 
+```python
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve, confusion_matrix
+
+best_svm = grid_search_svm.best_estimator_
+coef = best_svm.coef_.ravel()
+features_importance = np.abs(coef)
+indices = np.argsort(features_importance)[::-1]
+
+print("Top 20 important features (SVM):")
+for f in range(min(20, len(indices))):
+    feature_name = selected_feature_names[indices[f]]
+    print("%s (%f)" % (feature_name, features_importance[indices[f]]))
+
+print("\n")
+
+best_rf = grid_search_rf.best_estimator_
+importance = best_rf.feature_importances_
+top_indices = np.argsort(importance)[::-1][:20]
+
+
+print("Top 20 Feature Importance:")
+for index in top_indices:
+    feature_name = selected_feature_names[index]
+    print(f"{feature_name}: {importance[index]}")
+print("\n")
+best_ann = grid_search_ann.best_estimator_
+weights = best_ann.coefs_
+
+
+feature_importance = np.abs(weights[0]).sum(axis=1)
+
+top_features_index = np.argsort(feature_importance)[-20:][::-1]
+
+
+print("Top 20 Important Features:")
+for idx in top_features_index:
+    feature_name = selected_feature_names[idx]
+    print(f"{feature_name}: {feature_importance[idx]}")
+
+    # print(f"Feature {idx + 1}: {feature_importance[idx]}")
+
+print("\n")
+```
+
+```python
+Top 20 important features (SVM):
+qed (2.034821)
+PEOE_VSA4 (1.393445)
+BCUT2D_CHGHI (1.286525)
+NumHAcceptors (1.211815)
+EState_VSA9 (1.191918)
+VSA_EState10 (1.138230)
+SMR_VSA10 (1.129630)
+VSA_EState8 (1.088787)
+VSA_EState5 (0.947984)
+MolLogP (0.927657)
+SMR_VSA7 (0.878612)
+BCUT2D_MRHI (0.813003)
+HallKierAlpha (0.753999)
+SlogP_VSA1 (0.728554)
+MaxEStateIndex (0.707105)
+MaxAbsEStateIndex (0.707105)
+SMR_VSA9 (0.694168)
+PEOE_VSA9 (0.651155)
+PEOE_VSA2 (0.603743)
+FpDensityMorgan1 (0.569659)
+
+
+Top 20 Feature Importance:
+MaxPartialCharge: 0.11690350094971952
+MinAbsPartialCharge: 0.07589028402183211
+MaxAbsEStateIndex: 0.06996427253241876
+PEOE_VSA2: 0.059342916991622
+MaxEStateIndex: 0.05506900584784368
+SMR_VSA10: 0.0485890497980379
+BCUT2D_MWLOW: 0.045704500481776475
+SMR_VSA9: 0.03908561696559687
+FpDensityMorgan1: 0.03805215638000522
+EState_VSA3: 0.030494319541411782
+PEOE_VSA3: 0.03035566579943683
+HallKierAlpha: 0.028261561044375303
+SMR_VSA7: 0.02659686381254809
+VSA_EState1: 0.020701470425790732
+qed: 0.020485822885238116
+VSA_EState5: 0.020469303196951564
+BCUT2D_LOGPHI: 0.01640820371617181
+SMR_VSA6: 0.01578138277327718
+NumHAcceptors: 0.0147188581425311
+BCUT2D_CHGHI: 0.013425726234159567
+
+
+Top 20 Important Features:
+EState_VSA3: 13.880652116646576
+qed: 12.751100837952091
+PEOE_VSA2: 12.690568586430885
+PEOE_VSA4: 12.652543055640583
+HallKierAlpha: 12.440624152572468
+SMR_VSA9: 12.42363941072588
+MaxAbsEStateIndex: 12.368523859755218
+PEOE_VSA3: 12.210422691241352
+PEOE_VSA9: 12.081172504581302
+MinEStateIndex: 12.036518296510211
+SMR_VSA7: 11.86186272752981
+EState_VSA2: 11.807125427203623
+BCUT2D_CHGHI: 11.770331680408141
+MaxAbsPartialCharge: 11.764227046575986
+fr_Ndealkylation1: 11.712473625822009
+SMR_VSA10: 11.699331223846512
+VSA_EState8: 11.671878080540473
+VSA_EState6: 11.633089463104303
+MolLogP: 11.374083645367746
+PEOE_VSA1: 11.29848206074489
+```
 
 ```python
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve, confusion_matrix
@@ -302,16 +413,16 @@ plt.show()
     ANN召回率： 0.7058823529411765
     ANN F1得分： 0.7500000000000001
     ANN AUC值： 0.8124006359300477
-    
 
 
-    
+
+
 ![png](output_10_1.png)
     
 
 
 
-    
+
 ![png](output_10_2.png)
     
 
@@ -356,7 +467,7 @@ print(all_features.iloc[0:4,[0,1,2,-2,-1]])
     1      0.0  
     2      0.0  
     3      0.0  
-    
+
 
 
 ```python
@@ -372,17 +483,16 @@ print(numeric_features)
            'fr_tetrazole', 'fr_thiazole', 'fr_thiocyan', 'fr_thiophene',
            'fr_unbrch_alkane', 'fr_urea'],
           dtype='object', length=208)
-    
+
 
 
 ```python
-#数据特征值和标签
 X_predict=torch.tensor(all_features.values,dtype=torch.float32)
 print(X_predict.shape)
 ```
 
     torch.Size([1358, 208])
-    
+
 
 
 ```python
@@ -392,15 +502,12 @@ X_pre = X_predict[:, selected_features_index]
 
 ```python
 from sklearn.preprocessing import StandardScaler
-# 创建 StandardScaler 对象
 scaler = StandardScaler()
-# 对训练数据进行拟合和转换
 X_pre= scaler.fit_transform(X_train)
 ```
 
 
 ```python
-# 假设你有新的数据集 X_new，可以通过模型的 predict_proba 方法获取预测概率
 y_pred_rf_new = grid_search_rf.best_estimator_.predict_proba(X_pre )[:, 1]
 y_pred_svm_new = grid_search_svm.best_estimator_.predict_proba(X_pre )[:, 1]
 y_pred_ann_new = grid_search_ann.best_estimator_.predict_proba(X_pre )[:, 1]
@@ -429,104 +536,6 @@ for i, index in enumerate(top_30_indices_ann_new):
 
 ```
 
-    Random Forest Top 30 Predictions for New Data:
-    Sample 1:Compound Name Hederagenin 3-O-Arabinoside, Probability 1.0
-    Sample 2:Compound Name licarin b, Probability 1.0
-    Sample 3:Compound Name stachyose, Probability 1.0
-    Sample 4:Compound Name Tangshenoside I, Probability 0.99
-    Sample 5:Compound Name Licarin A, Probability 0.99
-    Sample 6:Compound Name Panose, Probability 0.99
-    Sample 7:Compound Name Licoleafol, Probability 0.98
-    Sample 8:Compound Name Croomionidine, Probability 0.97
-    Sample 9:Compound Name aspartic acid, Probability 0.97
-    Sample 10:Compound Name Glyoxal, Probability 0.97
-    Sample 11:Compound Name phytol, Probability 0.96
-    Sample 12:Compound Name Tr-Saponin A, Probability 0.96
-    Sample 13:Compound Name arginine, Probability 0.96
-    Sample 14:Compound Name praeruptorin a, Probability 0.96
-    Sample 15:Compound Name Isoeugenol, Probability 0.95
-    Sample 16:Compound Name cymarin, Probability 0.95
-    Sample 17:Compound Name dextrine, Probability 0.95
-    Sample 18:Compound Name Sucrose, Probability 0.95
-    Sample 19:Compound Name Astragaloside V, Probability 0.95
-    Sample 20:Compound Name D-Mannuronic Acid, Probability 0.95
-    Sample 21:Compound Name Macrostemonoside D, Probability 0.93
-    Sample 22:Compound Name lysine, Probability 0.93
-    Sample 23:Compound Name Canavanine, Probability 0.93
-    Sample 24:Compound Name succinic acid, Probability 0.93
-    Sample 25:Compound Name Platycodigenin, Probability 0.93
-    Sample 26:Compound Name calcium sulphate, Probability 0.92
-    Sample 27:Compound Name jujuboside a1, Probability 0.92
-    Sample 28:Compound Name Glyuranolide, Probability 0.92
-    Sample 29:Compound Name niga-ichigoside f1, Probability 0.92
-    Sample 30:Compound Name Alpha-Cedrene, Probability 0.92
-    
-    SVM Top 30 Predictions for New Data:
-    Sample 1: Compound Name stachyose, Probability 0.9945700731178494
-    Sample 2: Compound Name Hederagenin 3-O-Arabinoside, Probability 0.9938823811669456
-    Sample 3: Compound Name arginine, Probability 0.9938556352949578
-    Sample 4: Compound Name Panose, Probability 0.9928144372189245
-    Sample 5: Compound Name niga-ichigoside f1, Probability 0.9920377766390479
-    Sample 6: Compound Name Licarin A, Probability 0.9916415125364878
-    Sample 7: Compound Name dextrine, Probability 0.9915917087643027
-    Sample 8: Compound Name cymarin, Probability 0.9905401738615899
-    Sample 9: Compound Name licarin b, Probability 0.990438083348182
-    Sample 10: Compound Name Tangshenoside I, Probability 0.9902269465982172
-    Sample 11: Compound Name Platycodigenin, Probability 0.989803992400244
-    Sample 12: Compound Name Tr-Saponin A, Probability 0.9874880949127154
-    Sample 13: Compound Name D-Mannuronic Acid, Probability 0.9838032151182807
-    Sample 14: Compound Name jujuboside a1, Probability 0.9831868809760335
-    Sample 15: Compound Name Croomionidine, Probability 0.9815873844068622
-    Sample 16: Compound Name calcium sulphate, Probability 0.9799534426006957
-    Sample 17: Compound Name phytol, Probability 0.9795098433933558
-    Sample 18: Compound Name Macrostemonoside D, Probability 0.978933198013044
-    Sample 19: Compound Name Cis-Methyl Isoeugenol, Probability 0.9787758849946061
-    Sample 20: Compound Name Licoleafol, Probability 0.9787726927474524
-    Sample 21: Compound Name Soyasapogenol B, Probability 0.9787705481515608
-    Sample 22: Compound Name citric acid, Probability 0.9787701652230466
-    Sample 23: Compound Name lysine, Probability 0.9787633369057119
-    Sample 24: Compound Name Astramembrannin I, Probability 0.9787539311057615
-    Sample 25: Compound Name Glyoxal, Probability 0.9787536907426073
-    Sample 26: Compound Name Echinatine, Probability 0.9787516715819492
-    Sample 27: Compound Name canaline, Probability 0.9787494361744791
-    Sample 28: Compound Name nootkatone, Probability 0.9787469239520245
-    Sample 29: Compound Name 24-Methylenelophenol, Probability 0.9787447373177292
-    Sample 30: Compound Name laminarin, Probability 0.9787432834091789
-    
-    ANN Top 30 Predictions for New Data:
-    Sample 1: Compound Name dextrine, Probability 0.9999510370295767
-    Sample 2: Compound Name Platycodigenin, Probability 0.9998582321791052
-    Sample 3: Compound Name Glyoxal, Probability 0.999832104309334
-    Sample 4: Compound Name Tr-Saponin A, Probability 0.9998065480787875
-    Sample 5: Compound Name aspartic acid, Probability 0.9997692945861957
-    Sample 6: Compound Name stachyose, Probability 0.9996937729553617
-    Sample 7: Compound Name Panose, Probability 0.9992951513556686
-    Sample 8: Compound Name Licarin A, Probability 0.9992509981934541
-    Sample 9: Compound Name jujuboside a1, Probability 0.999248769835219
-    Sample 10: Compound Name calcium sulphate, Probability 0.9991632228216785
-    Sample 11: Compound Name Hederagenin 3-O-Arabinoside, Probability 0.9990366882314735
-    Sample 12: Compound Name niga-ichigoside f1, Probability 0.9987828696425416
-    Sample 13: Compound Name Astramembrannin I, Probability 0.998697836566945
-    Sample 14: Compound Name Croomionidine, Probability 0.9986773423023344
-    Sample 15: Compound Name cymarin, Probability 0.9985727887931578
-    Sample 16: Compound Name Licoleafol, Probability 0.9983659190855877
-    Sample 17: Compound Name arginine, Probability 0.9980583288315045
-    Sample 18: Compound Name licarin b, Probability 0.9979358147600187
-    Sample 19: Compound Name D-Mannuronic Acid, Probability 0.9965056553914563
-    Sample 20: Compound Name Isoeugenol, Probability 0.9953839971747056
-    Sample 21: Compound Name Astragaloside V, Probability 0.9949395083280875
-    Sample 22: Compound Name canaline, Probability 0.9939544069400933
-    Sample 23: Compound Name ursiniolide a, Probability 0.9932596797322953
-    Sample 24: Compound Name Cis-Methyl Isoeugenol, Probability 0.9929508943867874
-    Sample 25: Compound Name laminarin, Probability 0.9928259614298487
-    Sample 26: Compound Name praeruptorin a, Probability 0.9914126885958824
-    Sample 27: Compound Name succinic acid, Probability 0.9898872515992762
-    Sample 28: Compound Name Tangshenoside I, Probability 0.9890622374407438
-    Sample 29: Compound Name Canavanine, Probability 0.9866883146050023
-    Sample 30: Compound Name phytol, Probability 0.9858470888140076
-    
-
-
 ```python
 
 ```
@@ -535,3 +544,4 @@ for i, index in enumerate(top_30_indices_ann_new):
 ```python
 
 ```
+
